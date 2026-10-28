@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --spot-orange: #ff6b35;
+  --spot-orange-dark: #d9531f;
+  --spot-bg: #121212;
+  --spot-panel: #1b1b1a;
+  --spot-line: #2a2a28;
+  --spot-text: #f2f0eb;
+  --spot-muted: #9c9a93;
+
+  /* turunan dari desain dashboard */
+  --spot-sidebar: #161615;
+  --spot-raised: #222220;
+  --spot-chip: #262624;
+  --spot-line-strong: #3a3a37;
+  --spot-soft: #c9c7c0;
+  --spot-heat-1: #5c2e1c;
+  --spot-heat-2: #a84a26;
+
+  /* merah hanya untuk aksi hapus */
+  --spot-danger: #ff5c5f;
+  --spot-danger-soft: #ff8a8c;
+  --spot-danger-bg: #2a1617;
+}
+
+@theme inline {
+  --color-spot-orange: var(--spot-orange);
+  --color-spot-orange-dark: var(--spot-orange-dark);
+  --color-spot-bg: var(--spot-bg);
+  --color-spot-panel: var(--spot-panel);
+  --color-spot-line: var(--spot-line);
+  --color-spot-text: var(--spot-text);
+  --color-spot-muted: var(--spot-muted);
+  --color-spot-sidebar: var(--spot-sidebar);
+  --color-spot-raised: var(--spot-raised);
+  --color-spot-chip: var(--spot-chip);
+  --color-spot-line-strong: var(--spot-line-strong);
+  --color-spot-soft: var(--spot-soft);
+  --color-spot-heat-1: var(--spot-heat-1);
+  --color-spot-heat-2: var(--spot-heat-2);
+  --color-spot-danger: var(--spot-danger);
+  --color-spot-danger-soft: var(--spot-danger-soft);
+  --color-spot-danger-bg: var(--spot-danger-bg);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--spot-bg);
+  color: var(--spot-text);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
