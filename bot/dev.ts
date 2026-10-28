@@ -1,10 +1,12 @@
 // jalankan bot lokal pakai long polling: npm run bot
 // env dibaca dari .env.local lewat flag --env-file di script npm.
-// pesan terjadwal (pengingat, "kemarin kelewat", rekap mingguan) dicek tiap menit selama bot jalan.
+// pesan terjadwal (pengingat, "kemarin kelewat", rekap mingguan) dicek tiap menit,
+// pengingat istirahat tiap 10 detik, selama bot jalan.
 
 import { createBot } from "@/lib/bot";
+import { sendDue } from "@/lib/bot/istirahat";
 import { runScheduledTasks } from "@/lib/bot/jadwal";
-import { copy } from "@/lib/copy";
+import { syncProfile } from "@/lib/bot/setup";
 
 async function main() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -14,23 +16,25 @@ async function main() {
   }
 
   const bot = createBot(token);
-  await bot.api.setMyCommands(copy.commands);
-  // nama & deskripsi bot di telegram, diubah hanya kalau beda (setMyName dibatasi telegram)
-  try {
-    const p = copy.botProfile;
-    if ((await bot.api.getMyName()).name !== p.name) await bot.api.setMyName(p.name);
-    if ((await bot.api.getMyDescription()).description !== p.description) await bot.api.setMyDescription(p.description);
-    if ((await bot.api.getMyShortDescription()).short_description !== p.short) await bot.api.setMyShortDescription(p.short);
-  } catch (err) {
-    console.error("profil bot gagal diperbarui:", err);
+  // bot.start() menghapus webhook. kalau bot ini sudah dipasang di vercel, jangan direbut dari server.
+  const hook = await bot.api.getWebhookInfo();
+  if (hook.url) {
+    console.error(
+      `bot ini sudah jalan di server (webhook ${hook.url}).\n` +
+        "npm run bot tidak dijalankan supaya bot di server tetap hidup.\n" +
+        "mau balik ke mode lokal? jalankan dulu: npm run webhook -- hapus",
+    );
+    process.exit(1);
   }
+  await syncProfile(bot.api);
 
   const tick = () => runScheduledTasks(bot.api).catch((err) => console.error("pesan terjadwal gagal:", err));
-  const timer = setInterval(tick, 60_000);
+  const restTick = () => sendDue(bot.api).catch((err) => console.error("pengingat istirahat gagal:", err));
+  const timers = [setInterval(tick, 60_000), setInterval(restTick, 10_000)];
   void tick();
 
   const stop = () => {
-    clearInterval(timer);
+    timers.forEach(clearInterval);
     void bot.stop();
   };
   process.once("SIGINT", stop);

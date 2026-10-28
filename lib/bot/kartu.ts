@@ -328,7 +328,7 @@ export async function logAndShow(
   const resting =
     shown.setOrder <= shown.target && shown.hasDraft && exercise.kind !== "kardio" && !res.session.backdated;
   if (resting && user.chattiness === "aktif" && ctx.chat) {
-    istirahat.schedule(ctx.api, ctx.chat.id, user.id, {
+    await istirahat.schedule(ctx.chat.id, user.id, {
       cardMessageId: shown.messageId,
       setOrder: shown.setOrder,
       exerciseName: exercise.name,

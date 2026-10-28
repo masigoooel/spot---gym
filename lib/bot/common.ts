@@ -11,7 +11,12 @@ export function sender(ctx: Context): store.TelegramUser {
   return ctx.from;
 }
 
-export const appUrl = () => (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+// alamat web: NEXT_PUBLIC_APP_URL kalau diisi, di vercel otomatis alamat produksinya, selain itu localhost
+export const appUrl = () =>
+  (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000")
+  ).replace(/\/+$/, "");
 
 // telegram menolak tombol link ke localhost, jadi selama lokal link ditulis di teks
 export const isLocalUrl = (url: string) => /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|\/|$)/.test(url);

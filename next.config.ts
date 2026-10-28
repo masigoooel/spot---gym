@@ -2,10 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
-  // font kartu story dibaca dari disk saat runtime (lib/story.tsx), jadi ikutkan saat deploy
+  // font kartu story dibaca dari disk saat runtime (lib/story.tsx), jadi ikutkan saat deploy.
+  // bot (webhook) juga membuat gambar story untuk pesan rekap.
   outputFileTracingIncludes: {
     "/api/story/*": ["./assets/fonts/**"],
     "/bagikan/*": ["./assets/fonts/**"],
+    "/api/telegram": ["./assets/fonts/**"],
   },
   partialPrefetching: true,
   turbopack: {

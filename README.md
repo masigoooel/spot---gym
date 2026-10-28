@@ -150,7 +150,7 @@ set 1 kecatat, sama persis kayak minggu lalu.
 
 ## ✦ coba jalankan
 
-spot. belum di-hosting, jadi bot dan web-nya dijalankan sendiri di komputer. Siapkan Node.js 20.9+, project [Supabase](https://supabase.com) gratis, dan token bot dari [@BotFather](https://t.me/BotFather).
+Untuk menjalankan versimu sendiri, siapkan Node.js 20.9+, project [Supabase](https://supabase.com) gratis, dan token bot dari [@BotFather](https://t.me/BotFather). Di komputer, bot jalan pakai long polling; untuk dipakai sehari-hari, deploy ke Vercel (lihat di bawah).
 
 ```bash
 git clone https://github.com/masigoooel/spot---gym.git
@@ -164,7 +164,9 @@ npm run bot                  # bot telegram (long polling), di terminal lain
 | perintah | gunanya |
 | --- | --- |
 | `npm run dev` | web mode development |
-| `npm run bot` | jalankan bot pakai long polling, tanpa webhook |
+| `npm run bot` | jalankan bot lokal pakai long polling (menolak jalan kalau webhook server terpasang) |
+| `npm run webhook -- <alamat>` | pasang bot ke server: Telegram mengirim pesan ke `<alamat>/api/telegram` |
+| `npm run webhook -- hapus` | lepas webhook, supaya bot bisa dijalankan lokal lagi |
 | `npm run build` | build production |
 | `npm start` | jalankan hasil build |
 | `npm run lint` | ESLint |
@@ -174,7 +176,7 @@ npm run bot                  # bot telegram (long polling), di terminal lain
 <summary><b>siapkan database</b></summary>
 
 1. buat project baru di [supabase.com](https://supabase.com)
-2. buka **SQL Editor**, lalu jalankan isi `supabase/migrations/` berurutan dari `0001` sampai `0008`
+2. buka **SQL Editor**, lalu jalankan isi `supabase/migrations/` berurutan dari `0001` sampai `0009`
 3. jalankan `supabase/seed.sql` untuk mengisi daftar 268 gerakan dan template latihan per split
 4. salin **Project URL** dan **service role key** dari **Project Settings → API** ke `.env.local`
 
@@ -190,9 +192,25 @@ npm run bot                  # bot telegram (long polling), di terminal lain
 | `NEXT_PUBLIC_SUPABASE_URL` | ya | Project URL Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | ya | service role key, **hanya dipakai di server** |
 | `SESSION_SECRET` | ya | minimal 32 karakter, untuk cookie sesi dashboard |
-| `NEXT_PUBLIC_APP_URL` | tidak | default `http://localhost:3000` |
+| `NEXT_PUBLIC_APP_URL` | tidak | lokal: `http://localhost:3000`. Di Vercel kosongkan, alamat produksi terbaca otomatis |
+| `TELEGRAM_WEBHOOK_SECRET` | ya, di server | teks acak; Telegram mengirimnya di header supaya `/api/telegram` hanya menerima dari Telegram |
+| `CRON_SECRET` | ya, di server | teks acak; dicek di setiap panggilan `/api/cron` |
 
 > 🔒 Service role key dan token bot hanya dipakai di server, tidak pernah dikirim ke browser. `.env.local` sudah diabaikan git.
+
+</details>
+
+<details>
+<summary><b>deploy ke Vercel</b></summary>
+
+1. push repo ke GitHub
+2. di [vercel.com](https://vercel.com), pilih **Add New → Project** lalu import repo-nya
+3. di **Environment Variables**, isi semua variabel di atas kecuali `NEXT_PUBLIC_APP_URL`
+4. klik **Deploy**. Setiap push ke `main` otomatis di-deploy ulang
+5. pasang bot ke server: `npm run webhook -- https://<alamat-app>.vercel.app`
+6. jadwalkan cron: isi `<ALAMAT_APP>` dan `<CRON_SECRET>` di `supabase/cron.example.sql`, lalu jalankan di SQL Editor Supabase. `pg_cron` memanggil `/api/cron` tiap 30 detik untuk pengingat latihan, rekap mingguan, dan pengingat istirahat
+
+Function berjalan di region `hnd1` (Tokyo, lihat `vercel.json`). Samakan dengan region project Supabase-mu supaya bot tetap cepat.
 
 </details>
 
@@ -212,13 +230,14 @@ Tidak ada password. Kirim `/masuk` ke bot, lalu buka link sekali pakai yang diki
 | framework | Next.js 16 (App Router, Turbopack) + React 19 + TypeScript |
 | styling | Tailwind CSS v4 · font Geist & Geist Mono |
 | database | Supabase (Postgres), diakses hanya dari server |
-| bot | grammY, long polling lewat `npm run bot` |
+| bot | grammY: webhook `/api/telegram` di Vercel, long polling saat lokal |
+| jadwal | `pg_cron` + `pg_net` di Supabase → `/api/cron` tiap 30 detik |
 | login | link sekali pakai dari bot → cookie sesi terenkripsi (iron-session) |
 | gambar | `next/og` untuk kartu Story & rekap |
 | kualitas | ESLint · Vitest · TypeScript strict |
 
-1. pesan dan tombol masuk ke handler bot di `lib/bot/`, yang sama untuk long polling sekarang dan webhook nanti
-2. state bot (kartu aktif, draft angka, latihan yang dilewati) disimpan di tabel `bot_state`, bukan di memori
+1. pesan dan tombol masuk ke handler bot di `lib/bot/`, yang sama untuk webhook di server dan long polling di komputer
+2. state bot (kartu aktif, draft angka, latihan yang dilewati, pengingat istirahat) disimpan di database, bukan di memori, jadi aman di serverless
 3. tombol yang mencatat bersifat **idempotent**: ditekan dua kali cepat tetap jadi satu set
 4. hapus memakai *soft delete*, lalu volume, pr, dan streak dihitung ulang, jadi semua bisa diurungkan
 
@@ -231,8 +250,13 @@ app/
 ├─ masuk/                     login lewat link dari bot
 ├─ dashboard/                 ringkasan, progres, riwayat, pr, profil
 ├─ bagikan/[sessionId]/       pratinjau & bagikan kartu Story
-└─ api/story/                 gambar kartu Story (next/og)
-bot/dev.ts                    jalankan bot lokal (long polling) + pesan terjadwal
+└─ api/
+   ├─ telegram/               webhook bot
+   ├─ cron/                   pesan terjadwal & pengingat istirahat (dipanggil pg_cron)
+   └─ story/                  gambar kartu Story (next/og)
+bot/
+├─ dev.ts                     jalankan bot lokal (long polling) + pesan terjadwal
+└─ webhook.ts                 pasang / lepas webhook ke server
 lib/
 ├─ bot/                       handler bot: kenalan, kartu, cari, hapus, rekap, jadwal, istirahat
 ├─ copy.ts                    semua teks bot di satu tempat
@@ -243,7 +267,8 @@ lib/
 └─ story.tsx                  kartu Story
 supabase/
 ├─ migrations/                skema database, dijalankan berurutan
-└─ seed.sql                   268 gerakan + template latihan per split
+├─ seed.sql                   268 gerakan + template latihan per split
+└─ cron.example.sql           jadwal pg_cron setelah deploy
 ```
 
 </details>
@@ -273,8 +298,8 @@ supabase/
 
 ## ✦ catatan & kredit
 
-- bot berjalan pakai long polling, jadi hanya membalas selama `npm run bot` jalan
-- pengingat istirahat memakai timer di proses bot; saat nanti pindah ke webhook, bagian ini perlu penjadwal dari luar
+- pengingat istirahat dicek tiap 30 detik oleh cron, jadi datang 90–120 detik setelah set dicatat
+- satu token bot cuma bisa dipakai satu tempat: webhook di server **atau** long polling di komputer
 - berat benda di fitur setara itu perkiraan rata-rata, cukup untuk hiburan
 - font [Geist](https://vercel.com/font) oleh Vercel, SIL Open Font License
 
@@ -283,7 +308,10 @@ supabase/
 
 | masalah | solusi |
 | --- | --- |
-| bot tidak membalas | pastikan `npm run bot` sedang jalan dan `TELEGRAM_BOT_TOKEN` benar |
+| bot tidak membalas (server) | cek webhook dengan `npm run webhook -- <alamat>`: error terakhir dari Telegram ikut ditampilkan. Pastikan env di Vercel lengkap, lalu redeploy |
+| bot tidak membalas (lokal) | pastikan `npm run bot` sedang jalan dan `TELEGRAM_BOT_TOKEN` benar |
+| `npm run bot` menolak jalan | webhook server masih terpasang. Pakai bot di server, atau lepas dulu dengan `npm run webhook -- hapus` |
+| pengingat & rekap mingguan tidak datang | cek `select * from cron.job_run_details order by start_time desc limit 5;` di SQL Editor; `CRON_SECRET` harus sama dengan di Vercel |
 | "409: Conflict" di terminal bot | ada dua bot dengan token yang sama jalan bersamaan; matikan salah satunya |
 | link `/masuk` tidak bisa dibuka | link-nya sekali pakai dan ada masa berlakunya; kirim `/masuk` lagi ke bot |
 | dashboard kosong | catat minimal satu sesi lewat bot dulu |

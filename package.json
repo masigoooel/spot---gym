@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "bot": "tsx --env-file=.env.local bot/dev.ts"
+    "bot": "tsx --env-file=.env.local bot/dev.ts",
+    "webhook": "tsx --env-file=.env.local bot/webhook.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

@@ -7,8 +7,9 @@ Desain lengkap ada di canvas "spot." (Claude). Dokumen ini adalah acuan untuk ng
 
 ## Catatan perubahan
 
+- **28 okt (3)** — **hosting di vercel** (5.10, 9, 10): webhook `/api/telegram`, cron `pg_cron` → `/api/cron` tiap 30 detik, pengingat istirahat pindah ke tabel `rest_reminders` (migration `0009`), `npm run webhook`, region `hnd1`, env `TELEGRAM_WEBHOOK_SECRET` & `CRON_SECRET`.
+- **28 okt (2)** — **pengingat istirahat** (5.5, 5.9, 5.10, 5.11): 90 detik setelah set dicatat dan user diam, bot kirim satu pesan pendek supaya hp bunyi; pesannya dihapus begitu user menekan / mengetik apa pun. Awalnya timer di memori proses bot; sejak 28 okt (3) disimpan di database. Skenario uji 17.
 - **28 okt** — **latihan hari ini dari template bawaan cuma 5** (5.5, 5.11): user yang belum punya riwayat split itu (dan belum mengatur template sendiri) tidak lagi dapat "hari ini ada 10 latihan"; yang dihitung cuma 5 teratas, daftar pilihan tetap 10. "latihan 2 dari 5" sekarang mengikuti urutan dikerjakan, bukan posisi di template. Teks skenario 14 disamakan ("masih ada n yang belum"). Skenario uji 16.
-- **28 okt (2)** — **pengingat istirahat** (5.5, 5.9, 5.10, 5.11): 90 detik setelah set dicatat dan user diam, bot kirim satu pesan pendek supaya hp bunyi; pesannya dihapus begitu user menekan / mengetik apa pun. Timer di memori proses bot (lokal). Skenario uji 17.
 - **27 okt (13)** — **latihan berikutnya dipilih sendiri** (5.3, 5.5, 5.11): tombol jadi `[➡️ latihan berikutnya]` tanpa nama latihan; ditekan → kartu jadi daftar latihan hari ini (tanpa latihan sekarang) + `[🔍 cari latihan lain] [‹ kembali ke kartu]`, atau ketik nama latihannya. "3 set beres" bertanya "lanjut latihan apa?". Bot tidak lagi menyodorkan satu latihan tertentu.
 - **27 okt (12)** — **latihan dipilih sendiri** (5.2, 5.5, 5.8, 5.11): sesi tanpa set + `🏋️ kartu latihan` = pilih ulang dari awal; setelah split dipilih, bot tidak langsung mengirim kartu latihan pertama, tapi daftar latihan rekomendasi split itu (maks. 10, 2 kolom) + `[🔍 cari latihan lain] [‹ ganti split]`; latihan yang dipilih jadi kartu. Ganti split di tengah sesi juga berakhir di daftar ini (+ `‹ kembali ke kartu`).
 - **27 okt (11)** — **jadwal cuma saran + cara pakai di awal** (5.2, 5.3, 5.5, 5.8, 5.10, 5.11): `🏋️ kartu latihan` tanpa sesi → tanya dulu mau latihan apa (split jadwal paling atas, split lain tetap bisa); `🔄 ganti latihan` → `📅 ganti split hari ini`; pesan perkenalan berisi cara pakai, pesan jadwal setelahnya, tur terpisah dihapus. Skenario uji 15.
@@ -685,7 +686,9 @@ Setelah hapus: *"set 1 udah dihapus. pr bench sekarang 72,5 kg."* `[↩️ urung
 - Tombol yang mencatat **idempotent** (tekan dua kali cepat = satu set).
 - Bot boleh menghapus pesan masuk di chat pribadi; kalau gagal (lebih dari 48 jam), abaikan.
 - Satu sesi penuh menghasilkan maks.: 1 baris padat per latihan + 1 kartu aktif + 1 rekap (+ pesan pilihan sementara saat 🔄 yang berubah jadi kartu, + pengingat istirahat yang dihapus lagi di aksi berikutnya).
-- **Pengingat istirahat pakai timer di memori proses bot** (`lib/bot/istirahat.ts`): jalan di mode polling lokal; bot restart = pengingat yang tertunda hilang (tidak apa-apa). Saat pindah ke webhook (hosting), timer seperti ini tidak jalan di serverless — perlu penjadwal dari luar, atau fitur ini dimatikan dulu.
+- **Pengingat istirahat disimpan di tabel `rest_reminders`** (`lib/bot/istirahat.ts`, migration `0009`): satu baris per chat (`due_at`, kartu & nomor set yang diharapkan, `message_id`). Dikirim oleh `sendDue()` — tiap 10 detik di `npm run bot`, tiap 30 detik lewat `/api/cron` setelah hosting — jadi pengingat datang 90–120 detik setelah set. Setiap update dari user menghapus baris itu (dan pesannya kalau sudah terkirim). Pengiriman "mengambil giliran" dulu (`message_id = 0`) supaya tidak terkirim dua kali.
+- **Pesan terjadwal & cron**: lokal dijalankan `bot/dev.ts` tiap menit; setelah hosting, `pg_cron` di Supabase memanggil `GET /api/cron` tiap 30 detik dengan `Authorization: Bearer <CRON_SECRET>` (`supabase/cron.example.sql`). Pesan terjadwal hanya di paruh pertama tiap menit.
+- **Webhook**: `POST /api/telegram` (grammY `webhookCallback`), header `X-Telegram-Bot-Api-Secret-Token` wajib cocok dengan `TELEGRAM_WEBHOOK_SECRET`. Dipasang/dilepas dengan `npm run webhook -- <alamat>` / `npm run webhook -- hapus`. Selama webhook terpasang, `npm run bot` menolak jalan (long polling akan menghapus webhook).
 
 ### 5.11 Skenario uji wajib (jalankan semua sebelum lapor selesai)
 
@@ -822,7 +825,7 @@ Di wordmark: lebar hex `0.5em`, tinggi `0.56em`, duduk di baseline, margin kiri 
 6. **Dashboard ringkasan**, lalu progres, riwayat, pr, profil.
 7. **Kartu story** — `next/og` + halaman bagikan; bot kirim gambar saat `/selesai`.
 8. **Landing.**
-9. **Hosting (nanti)** — deploy Vercel, pindah bot dari polling ke webhook `/api/telegram`, ganti `NEXT_PUBLIC_APP_URL`, opsional tambah Telegram Login Widget.
+9. **Hosting** — deploy Vercel (region `hnd1`, sama dengan Supabase di Tokyo), bot pindah dari polling ke webhook `/api/telegram`, cron lewat `pg_cron` Supabase ke `/api/cron`. Alamat web otomatis dari `VERCEL_PROJECT_PRODUCTION_URL` (atau `NEXT_PUBLIC_APP_URL` kalau diisi). Opsional nanti: Telegram Login Widget.
 
 ---
 
@@ -834,10 +837,11 @@ NEXT_PUBLIC_BOT_USERNAME=spot_gymbot   # dipakai untuk link "buka bot" (t.me/spo
 NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=      # hanya di server, jangan pernah ke client
 SESSION_SECRET=                 # minimal 32 karakter, untuk cookie sesi
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=http://localhost:3000   # lokal saja; di vercel kosongkan (otomatis alamat produksi)
 
-# nanti, saat hosting:
-# TELEGRAM_WEBHOOK_SECRET=      # dicek di header X-Telegram-Bot-Api-Secret-Token
+# hosting (vercel):
+TELEGRAM_WEBHOOK_SECRET=        # acak, dicek di header X-Telegram-Bot-Api-Secret-Token
+CRON_SECRET=                    # acak, dicek di header Authorization panggilan /api/cron
 ```
 
 `.env.local` jangan di-commit.
